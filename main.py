@@ -130,9 +130,9 @@ if __name__ == "__main__":
             )
 
     # print("E", e, v, m)
-    # print("Total cards:", n_cards)
-    # print("white_cards:", n_white_cards)
-    # print("ratio:", ratio)
+    print("Total cards:", n_cards)
+    print("white_cards:", n_white_cards)
+    print("ratio:", ratio)
     # print("non normalized weightd:", non_normalized_weights)
     # print("total weights:", total_weights)
     # print("total non normalized accumed:", total_non_normalized_all)
