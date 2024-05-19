@@ -25,13 +25,7 @@ if __name__ == "__main__":
         5: ["a", "h"],
         6: ["k"],
     }
-    white_cards = {
-        1: 0,
-        2: 1,
-        3: 0,
-        4: 0,
-        5: 0,
-    }
+    white_cards = {1: 0, 2: 1, 3: 0, 4: 0, 5: 0}
     total_weights = {}
     non_normalized_weights = {}
     normalized_weights = {}
@@ -130,9 +124,9 @@ if __name__ == "__main__":
             )
 
     # print("E", e, v, m)
-    print("Total cards:", n_cards)
-    print("white_cards:", n_white_cards)
-    print("ratio:", ratio)
+    # print("Total cards:", n_cards)
+    # print("white_cards:", n_white_cards)
+    # print("ratio:", ratio)
     # print("non normalized weightd:", non_normalized_weights)
     # print("total weights:", total_weights)
     # print("total non normalized accumed:", total_non_normalized_all)

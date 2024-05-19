@@ -2,13 +2,15 @@
 #include <iostream>
 #include <map>
 #include <ostream>
+#include <utility>
 
-#define DEBUG_ENABLED 1
+#define DEBUG_ENABLED 0
 
-#ifdef DEBUG_ENABLED
+#if DEBUG_ENABLED
 #define DEBUG(string, ...)                                                     \
   (printf("DEBUG [%s %s]: ", __DATE__, __TIME__), printf(string, __VA_ARGS__), \
    printf("\n"))
+
 #else
 #define DEBUG(string, ...)
 #endif
@@ -20,18 +22,27 @@ typedef std::vector<std::string> RankArray;
 typedef std::map<unsigned int, RankArray> RankDef;
 typedef std::map<unsigned int, DataPrecision> RankData;
 typedef std::map<unsigned int, unsigned int> WhiteCardsDef;
-typedef std::map<std::string, float> GeneratedWeights;
 
 class Utils {
 public:
-  static void printFinalWeights(GeneratedWeights &weights) {
-    for (const auto &[key, value] : weights) {
-      std::cout << "[" << key << "]" << " = " << value << std::endl;
-    }
-  }
   static void printRanksData(RankData rankData) {
     for (const auto &[key, value] : rankData) {
       std::cout << "[" << key << "]" << " = " << value << std::endl;
+    }
+  }
+
+  static void printRanksDataFinal(RankData rankData, RankDef ranks) {
+    for (const auto &[key, weight] : rankData) {
+      for (const auto &criteria : ranks[key]) {
+        std::cout << "[" << criteria << "] = " << weight << std::endl;
+      }
+    }
+  }
+
+  static void printUnorderedRanksData(
+      std::vector<std::pair<unsigned int, DataPrecision>> ratio) {
+    for (const auto &val : ratio) {
+      std::cout << "[" << val.first << "]" << " = " << val.second << std::endl;
     }
   }
   static DataPrecision roundToXDecimals(DataPrecision value,
@@ -53,13 +64,19 @@ private:
   RankData normalizedWeightsTruncted;
   RankData normalizedWeightsFinal;
   RankData totalNonNormalized;
-  unsigned int nCards;
-  unsigned int nWhiteCards;
-  unsigned int m;
-  DataPrecision ratio;
-  DataPrecision totalNonNormalizedAll;
-  DataPrecision totalNormalizedAll;
-  DataPrecision totalNormalizedAllTruncated;
+  unsigned int nCards = 0;
+  unsigned int nWhiteCards = 0;
+  RankData m;
+  RankData toRound;
+  unsigned int mTotal = 0;
+  DataPrecision ratio = 0;
+  DataPrecision totalNonNormalizedAll = 0;
+  DataPrecision totalNormalizedAll = 0;
+  DataPrecision totalNormalizedAllTruncated = 0;
+  RankData ratio1;
+  RankData ratio2;
+  std::vector<std::pair<unsigned int, DataPrecision>> sortedRatio2;
+  unsigned int v;
 
   // method definition
   void calculateTotalCards() {
@@ -116,18 +133,74 @@ private:
     }
   }
 
+  void generateRatios() {
+    for (const auto &[key, value] : this->ranks) {
+      this->ratio1[key] = Utils::roundToXDecimals(
+          (pow(10, -W) - (this->normalizedWeights[key] -
+                          this->normalizedWeightsTruncted[key])) /
+              this->normalizedWeights[key],
+          9);
+      this->ratio2[key] = Utils::roundToXDecimals(
+          (normalizedWeights[key] - normalizedWeightsTruncted[key]) /
+              normalizedWeights[key],
+          9);
+    }
+  }
+
+  void mapM() {
+    for (const auto &[key, value] : this->ranks) {
+      if (this->ratio1[key] > this->ratio2[key]) {
+        // Does not matter what is in here, olny if true
+        this->m[key] = 1.0;
+        this->mTotal += value.size();
+      }
+    }
+  }
+
+  void sortRatio2() {
+    // Copying data from ratio2
+    for (const auto &[key, value] : this->ratio2) {
+      std::pair<unsigned int, DataPrecision> val;
+      val.first = key;
+      val.second = value;
+      this->sortedRatio2.push_back(val);
+    }
+
+    std::sort(this->sortedRatio2.begin(), this->sortedRatio2.end(),
+              [](const auto &a, const auto &b) { return a.second > b.second; });
+  }
+
+  void mapRanksToRound() {
+    unsigned int count = 0;
+    for (const auto &value : this->sortedRatio2) {
+      if (count >= this->v)
+        break;
+      if (this->m[value.first])
+        continue;
+      for (auto &_ : this->ranks[value.first]) {
+        count++;
+        this->toRound[value.first] = value.second;
+      }
+    }
+  }
+
 public:
   SimosRevised(RankDef ranks, WhiteCardsDef whiteCards) {
     this->ranks = ranks;
     this->whiteCards = whiteCards;
   }
-  GeneratedWeights generateWeights() {
+  RankData generateWeights() {
     this->calculateTotalCards();
     this->calculateTotalWhiteCars();
     this->ratio = Utils::roundToXDecimals((Z - 1) / this->nWhiteCards, 6);
     this->calculateNonNormalizedWeights();
     this->calculateTotalNonNormalized();
     this->calculateNormalizedWeights();
+    this->generateRatios();
+    this->mapM();
+    this->v = int(pow(10, W) * (100 - this->totalNormalizedAllTruncated));
+    this->sortRatio2();
+    this->mapRanksToRound();
     DEBUG("Total cards: %d", this->nCards);
     DEBUG("Total white cards: %d", this->nWhiteCards);
     DEBUG("Ratio: %f", this->ratio);
@@ -155,10 +228,49 @@ public:
           << "==============NORMALIZED WEIGHTS TRUNCATED END=============="
           << std::endl;
     }
+    if (DEBUG_ENABLED) {
+      std::cout << "==============RATIO 1 BEGIN==============" << std::endl;
+      Utils::printRanksData(this->ratio1);
+      std::cout << "==============RATIO 1 END==============" << std::endl;
+    }
+    if (DEBUG_ENABLED) {
+      std::cout << "==============RATIO 2 BEGIN==============" << std::endl;
+      Utils::printRanksData(this->ratio2);
+      std::cout << "==============RATIO 2 END==============" << std::endl;
+    }
     DEBUG("Total Normalized: %f", this->totalNormalizedAll);
     DEBUG("Total Normalized Truncated: %f", this->totalNormalizedAllTruncated);
+    if (DEBUG_ENABLED) {
+      std::cout << "==============M BEGIN==============" << std::endl;
+      Utils::printRanksData(this->m);
+      std::cout << "==============M END==============" << std::endl;
+    }
+    DEBUG("M total: %d: ", this->mTotal);
+    DEBUG("V: %d ", this->v);
+    if (DEBUG_ENABLED) {
+      std::cout << "==============SORTED RATIO 2 BEGIN=============="
+                << std::endl;
+      Utils::printUnorderedRanksData(this->sortedRatio2);
+      std::cout << "==============SORTED RATIO 2 END=============="
+                << std::endl;
+    }
+    if (DEBUG_ENABLED) {
+      std::cout << "==============TO ROUND BEGIN==============" << std::endl;
+      Utils::printRanksData(this->toRound);
+      std::cout << "==============TO ROUND END==============" << std::endl;
+    }
 
-    return GeneratedWeights{{"x", 1.50}};
+    for (const auto &[key, value] : this->ranks) {
+      if (this->toRound[key]) {
+        this->normalizedWeightsFinal[key] =
+            Utils::roundToXDecimals(normalizedWeights[key], 1);
+      } else {
+        this->normalizedWeightsFinal[key] =
+            Utils::truncateToXDecimals(normalizedWeights[key], 1);
+      }
+    }
+
+    return this->normalizedWeightsFinal;
   }
 };
 
@@ -169,14 +281,13 @@ int main() {
       {5, RankArray{"a", "h"}},           {6, RankArray{"k"}},
   };
 
-  WhiteCardsDef whiteCards = {
-      {1, 0}, {2, 1}, {3, 0}, {4, 0}, {5, 0},
-  };
+  WhiteCardsDef whiteCards = {{1, 0}, {2, 1}, {3, 0}, {4, 0}, {5, 0}};
 
   SimosRevised simos = SimosRevised(ranks, whiteCards);
 
-  GeneratedWeights finalWeights = simos.generateWeights();
+  RankData finalWeights = simos.generateWeights();
 
-  Utils::printFinalWeights(finalWeights);
+  Utils::printRanksDataFinal(finalWeights, ranks);
+
   return 0;
 }
